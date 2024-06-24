@@ -63,7 +63,15 @@ class General
             base64_encode("{$server['cipher']}:{$password}")
         );
         $remote = filter_var($server['host'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $server['host'] . ']' : $server['host'];
-        return "ss://{$str}@{$remote}:{$server['port']}#{$name}\r\n";
+        if ($server['obfs']) {
+            if ($server['obfs_settings']['host']) {
+                return "ss://{$str}@{$remote}:{$server['port']}/?plugin=obfs-local;obfs=http;obfs-host={$server['obfs_settings']['host']}#{$name}\r\n";
+            } else {
+                return "ss://{$str}@{$remote}:{$server['port']}/?plugin=obfs-local;obfs=http#{$name}\r\n";
+            }
+        } else {
+            return "ss://{$str}@{$remote}:{$server['port']}#{$name}\r\n";
+        }
     }
 
     public static function buildVmess($uuid, $server)
@@ -98,7 +106,7 @@ class General
         }
         if ((string)$server['network'] === 'ws') {
             $wsSettings = $server['networkSettings'];
-            if (isset($wsSettings['path'])) $config['path'] = "${wsSettings['path']}?ed=4096";
+            if (isset($wsSettings['path'])) $config['path'] = "${wsSettings['path']}?ed=2048";
             if (isset($wsSettings['headers']['Host'])) $config['host'] = $wsSettings['headers']['Host'];
         }
         if ((string)$server['network'] === 'grpc') {
@@ -127,16 +135,26 @@ class General
     {
         $remote = filter_var($server['host'], FILTER_VALIDATE_IP, FILTER_FLAG_IPV6) ? '[' . $server['host'] . ']' : $server['host'];
      	$name = rawurlencode($server['name']);
-        $query = http_build_query([
-            'protocol' => 'udp',
-            'auth' => $password,
-            'insecure' => $server['insecure'],
-            'peer' => $server['server_name'],
-            'upmbps' => $server['up_mbps'],
-            'downmbps' => $server['up_mbps']
-//            'obfsParam' => $server['server_key']
-        ]);
-        $uri = "hysteria://{$remote}:{$server['port']}?{$query}#{$name}";
+        if (is_array($server['tags']) && in_array("hy2", $server['tags'])) {
+            $query2 = http_build_query([
+                'insecure' => $server['insecure'],
+                'sni' => $server['server_name']
+//                'obfs' => 'salamander',
+//                'obfs-password' => $server['server_key']
+            ]);
+            $uri = "hysteria2://{$password}@{$remote}:{$server['port']}/?{$query2}#{$name}";
+        } else {
+            $query = http_build_query([
+                'protocol' => 'udp',
+                'auth' => $password,
+                'insecure' => $server['insecure'],
+                'peer' => $server['server_name'],
+                'upmbps' => $server['up_mbps'],
+                'downmbps' => $server['up_mbps']
+    //            'obfsParam' => $server['server_key']
+            ]);
+            $uri = "hysteria://{$remote}:{$server['port']}?{$query}#{$name}";
+        }
         $uri .= "\r\n";
         return $uri;
     }
@@ -150,7 +168,7 @@ class General
         if ($server['tls']) {
             $config['fp'] = 'firefox';
             if (is_array($server['tags']) && in_array("VLESS", $server['tags']) && in_array("XTLS", $server['tags'])) {
-                    $config['flow'] = "xtls-rprx-vision-udp443";
+                    $config['flow'] = "xtls-rprx-vision";
             }
             if ($server['tlsSettings']) {
                 $tlsSettings = $server['tlsSettings'];
@@ -166,7 +184,7 @@ class General
         }
         if ((string)$server['network'] === 'ws') {
             $wsSettings = $server['networkSettings'];
-            if (isset($wsSettings['path'])) $config['path'] = "${wsSettings['path']}?ed=4096";
+            if (isset($wsSettings['path'])) $config['path'] = "${wsSettings['path']}?ed=2048";
             if (isset($wsSettings['headers']['Host'])) $config['host'] = $wsSettings['headers']['Host'];
         }
         if ((string)$server['network'] === 'grpc') {

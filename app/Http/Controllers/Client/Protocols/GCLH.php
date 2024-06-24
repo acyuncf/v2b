@@ -25,8 +25,8 @@ class GCLH
         header("subscription-userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
         header('profile-update-interval: 24');
         header("content-disposition:attachment;filename*=UTF-8''".rawurlencode($appName));
-        $defaultConfig = base_path() . '/resources/rules/vpn.clash.yaml';
-        $customConfig = base_path() . '/resources/rules/customvpn.clash.yaml';
+        $defaultConfig = base_path() . '/resources/rules/vpn.meta.yaml';
+        $customConfig = base_path() . '/resources/rules/customvpn.meta.yaml';
         if (\File::exists($customConfig)) {
             $config = Yaml::parseFile($customConfig);
         } else {
@@ -47,7 +47,7 @@ class GCLH
                 } else {
                     array_push($proxy, self::buildVmess($user['uuid'], $item));
                     array_push($proxies, $item['name']);
-	        }
+	            }
             }
             if ($item['type'] === 'trojan') {
                 array_push($proxy, self::buildTrojan($user['uuid'], $item));
@@ -112,6 +112,13 @@ class GCLH
         $array['cipher'] = $server['cipher'];
         $array['password'] = $password;
         $array['udp'] = true;
+        if ($server['obfs']) {
+            $array['plugin'] = 'obfs';
+            $array['plugin-opts']['mode'] = 'http';
+            if ($server['obfs_settings']['host']) {
+                $array['plugin-opts']['host'] = $server['obfs_settings']['host'];
+            }
+        }
         return $array;
     }
 
@@ -149,15 +156,15 @@ class GCLH
                 $wsSettings = $server['networkSettings'];
                 $array['ws-opts'] = [];
                 if (isset($wsSettings['path']) && !empty($wsSettings['path']))
-                    $array['ws-opts']['path'] = "${wsSettings['path']}?ed=4096";
+                    $array['ws-opts']['path'] = "${wsSettings['path']}?ed=2048";
                 if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
                     $array['ws-opts']['headers'] = ['Host' => $wsSettings['headers']['Host']];
                 if (isset($wsSettings['path']) && !empty($wsSettings['path']))
-                    $array['ws-path'] = "${wsSettings['path']}?ed=4096";
+                    $array['ws-path'] = "${wsSettings['path']}?ed=2048";
                 if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
                     $array['ws-headers'] = ['Host' => $wsSettings['headers']['Host']];
             }
-            $array['max-early-data'] = 4096;
+            $array['max-early-data'] = 2048;
             $array['early-data-header-name'] = 'Sec-WebSocket-Protocol';
         }
         if ($server['network'] === 'grpc') {
@@ -188,16 +195,24 @@ class GCLH
 
     public static function buildHysteria($password, $server)
     {
-     	$array = [];
+        $array = [];
         $array['name'] = $server['name'];
-        $array['type'] = 'hysteria';
         $array['server'] = $server['host'];
         $array['port'] = $server['port'];
-        $array['auth_str'] = $password;
-//        $array['obfs'] = $server['server_key'];
-        $array['protocol'] = 'udp';
-        $array['up'] = $server['up_mbps'];
-        $array['down'] = $server['down_mbps'];
+        $array['udp'] = true;
+        if (is_array($server['tags']) && in_array("hy2", $server['tags'])) {
+            $array['type'] = 'hysteria2';
+            $array['password'] = $password;
+            //$array['obfs'] = 'salamander';
+            //$array['obfs-password'] = $server['server_key'];
+        } else {
+            $array['type'] = 'hysteria';
+            $array['auth_str'] = $password;
+            // $array['obfs'] = $server['server_key'];
+            $array['up'] = $server['up_mbps'];
+            $array['down'] = $server['down_mbps'];
+            $array['protocol'] = 'udp';
+        }
         if (!empty($server['server_name'])) $array['sni'] = $server['server_name'];
         $array['skip-cert-verify'] = !empty($server['insecure']) ? true : false;
         return $array;
@@ -216,7 +231,7 @@ class GCLH
         if ($server['tls']) {
             $array['tls'] = true;
             if (is_array($server['tags']) && in_array("VLESS", $server['tags']) && in_array("XTLS", $server['tags'])) {
-                    $array['flow'] = "xtls-rprx-vision-udp443";
+                    $array['flow'] = "xtls-rprx-vision";
             }
             if ($server['tlsSettings']) {
                 $tlsSettings = $server['tlsSettings'];
@@ -237,15 +252,15 @@ class GCLH
                 $wsSettings = $server['networkSettings'];
                 $array['ws-opts'] = [];
                 if (isset($wsSettings['path']) && !empty($wsSettings['path']))
-                    $array['ws-opts']['path'] = "${wsSettings['path']}?ed=4096";
+                    $array['ws-opts']['path'] = "${wsSettings['path']}?ed=2048";
                 if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
                     $array['ws-opts']['headers'] = ['Host' => $wsSettings['headers']['Host']];
                 if (isset($wsSettings['path']) && !empty($wsSettings['path']))
-                    $array['ws-path'] = "${wsSettings['path']}?ed=4096";
+                    $array['ws-path'] = "${wsSettings['path']}?ed=2048";
                 if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
                     $array['ws-headers'] = ['Host' => $wsSettings['headers']['Host']];
             }
-            $array['max-early-data'] = 4096;
+            $array['max-early-data'] = 2048;
             $array['early-data-header-name'] = 'Sec-WebSocket-Protocol';
         }
         if ($server['network'] === 'grpc') {

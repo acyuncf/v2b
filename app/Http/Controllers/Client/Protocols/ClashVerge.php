@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Client\Protocols;
 use App\Utils\Helper;
 use Symfony\Component\Yaml\Yaml;
 
-class Clash
+// A copy of ClashMeta.php
+
+class ClashVerge
 {
-    public $flag = 'clash';
+    public $flag = 'verge';
     private $servers;
     private $user;
 
@@ -25,8 +27,8 @@ class Clash
         header("subscription-userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
         header('profile-update-interval: 24');
         header("content-disposition:attachment;filename*=UTF-8''".rawurlencode($appName));
-        $defaultConfig = base_path() . '/resources/rules/default.clash.yaml';
-        $customConfig = base_path() . '/resources/rules/custom.clash.yaml';
+        $defaultConfig = base_path() . '/resources/rules/default.meta.yaml';
+        $customConfig = base_path() . '/resources/rules/custom.meta.yaml';
         if (\File::exists($customConfig)) {
             $config = Yaml::parseFile($customConfig);
         } else {
@@ -41,13 +43,20 @@ class Clash
                 array_push($proxies, $item['name']);
             }
             if ($item['type'] === 'vmess') {
-                if (!(is_array($item['tags']) && in_array("VLESS", $item['tags']))) {
+                if (is_array($item['tags']) && in_array("VLESS", $item['tags'])) {
+                    array_push($proxy, self::buildVless($user['uuid'], $item));
+                    array_push($proxies, $item['name']);
+                } else {
                     array_push($proxy, self::buildVmess($user['uuid'], $item));
                     array_push($proxies, $item['name']);
 	            }
             }
             if ($item['type'] === 'trojan') {
                 array_push($proxy, self::buildTrojan($user['uuid'], $item));
+                array_push($proxies, $item['name']);
+            }
+            if ($item['type'] === 'hysteria') {
+                array_push($proxy, self::buildHysteria($user['uuid'], $item));
                 array_push($proxies, $item['name']);
             }
         }
@@ -129,7 +138,7 @@ class Clash
 
         if ($server['tls']) {
             $array['tls'] = true;
-//            $array['cipher'] = 'zero';
+            $array['cipher'] = 'zero';
             if ($server['tlsSettings']) {
                 $tlsSettings = $server['tlsSettings'];
                 if (isset($tlsSettings['allowInsecure']) && !empty($tlsSettings['allowInsecure']))
@@ -183,6 +192,88 @@ class Clash
         $array['udp'] = true;
         if (!empty($server['server_name'])) $array['sni'] = $server['server_name'];
         if (!empty($server['allow_insecure'])) $array['skip-cert-verify'] = ($server['allow_insecure'] ? true : false);
+        return $array;
+    }
+
+    public static function buildHysteria($password, $server)
+    {
+        $array = [];
+        $array['name'] = $server['name'];
+        $array['server'] = $server['host'];
+        $array['port'] = $server['port'];
+        $array['udp'] = true;
+        if (is_array($server['tags']) && in_array("hy2", $server['tags'])) {
+            $array['type'] = 'hysteria2';
+            $array['password'] = $password;
+            //$array['obfs'] = 'salamander';
+            //$array['obfs-password'] = $server['server_key'];
+        } else {
+            $array['type'] = 'hysteria';
+            $array['auth_str'] = $password;
+            // $array['obfs'] = $server['server_key'];
+            $array['up'] = $server['up_mbps'];
+            $array['down'] = $server['down_mbps'];
+            $array['protocol'] = 'udp';
+        }
+        if (!empty($server['server_name'])) $array['sni'] = $server['server_name'];
+        $array['skip-cert-verify'] = !empty($server['insecure']) ? true : false;
+        return $array;
+    }
+
+    public static function buildVless($uuid, $server)
+    {
+        $array = [];
+        $array['name'] = $server['name'];
+        $array['type'] = 'vless';
+        $array['server'] = $server['host'];
+        $array['port'] = $server['port'];
+        $array['uuid'] = $uuid;
+        $array['udp'] = true;
+
+        if ($server['tls']) {
+            $array['tls'] = true;
+            if (is_array($server['tags']) && in_array("VLESS", $server['tags']) && in_array("XTLS", $server['tags'])) {
+                    $array['flow'] = "xtls-rprx-vision";
+            }
+            if ($server['tlsSettings']) {
+                $tlsSettings = $server['tlsSettings'];
+                if (isset($tlsSettings['allowInsecure']) && !empty($tlsSettings['allowInsecure']))
+                    $array['skip-cert-verify'] = ($tlsSettings['allowInsecure'] ? true : false);
+                if (isset($tlsSettings['serverName']) && !empty($tlsSettings['serverName']))
+                    $array['servername'] = $tlsSettings['serverName'];
+            }
+        }
+        if ($server['network'] === 'tcp') {
+            $tcpSettings = $server['networkSettings'];
+            if (isset($tcpSettings['header']['type'])) $array['network'] = $tcpSettings['header']['type'];
+            if (isset($tcpSettings['header']['request']['path'][0])) $array['http-opts']['path'] = $tcpSettings['header']['request']['path'][0];
+        }
+        if ($server['network'] === 'ws') {
+            $array['network'] = 'ws';
+            if ($server['networkSettings']) {
+                $wsSettings = $server['networkSettings'];
+                $array['ws-opts'] = [];
+                if (isset($wsSettings['path']) && !empty($wsSettings['path']))
+                    $array['ws-opts']['path'] = "${wsSettings['path']}?ed=2048";
+                if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
+                    $array['ws-opts']['headers'] = ['Host' => $wsSettings['headers']['Host']];
+                if (isset($wsSettings['path']) && !empty($wsSettings['path']))
+                    $array['ws-path'] = "${wsSettings['path']}?ed=2048";
+                if (isset($wsSettings['headers']['Host']) && !empty($wsSettings['headers']['Host']))
+                    $array['ws-headers'] = ['Host' => $wsSettings['headers']['Host']];
+            }
+            $array['max-early-data'] = 2048;
+            $array['early-data-header-name'] = 'Sec-WebSocket-Protocol';
+        }
+        if ($server['network'] === 'grpc') {
+            $array['network'] = 'grpc';
+            if ($server['networkSettings']) {
+                $grpcSettings = $server['networkSettings'];
+                $array['grpc-opts'] = [];
+                if (isset($grpcSettings['serviceName'])) $array['grpc-opts']['grpc-service-name'] = $grpcSettings['serviceName'];
+            }
+        }
+
         return $array;
     }
 

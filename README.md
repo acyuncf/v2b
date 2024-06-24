@@ -8,12 +8,13 @@ The enhanced v2board
 
 Hysteria
  - Multiple bugs fixed
+ - Support hysteria2
 
 VLESS
  - Add vless support
  - Multi GUN mode on grpc
  - other stuffs that Vmess has
- - XTLS supported
+ - VLESS flow supported
 
 Vmess 
  - TLS fingerprint, firefox by default
@@ -24,6 +25,12 @@ Vmess
 
 Subscription:
 
+ - Support SingBox subscription
+
  - ClashVPN mode profile (Proxy all traffic except local and icmp), add &flag=gclh to fetch it
 
  - Simplified the default clash config
+
+# Thanks for their support
+
+@Libra258 - email filter
